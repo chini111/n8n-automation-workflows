@@ -1,0 +1,337 @@
+{
+  "name": "Reddit to LinkedIn pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "id": "ce62d132-8046-4b52-a818-013c0e9c94d9",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=5",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        0
+      ],
+      "id": "ba27b7c0-90e7-4e18-9e38-048e0d60a2d8",
+      "name": "HN - Top stories"
+    },
+    {
+      "parameters": {
+        "url": "https://hn.algolia.com/api/v1/search?query=technology&tags=story&hitsPerPage=5",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        128
+      ],
+      "id": "775f9c28-7b4f-40d6-9b42-1407e505c47b",
+      "name": "HN - Tech stories"
+    },
+    {
+      "parameters": {
+        "url": "https://hn.algolia.com/api/v1/search?query=AI&tags=story&hitsPerPage=5",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        -144
+      ],
+      "id": "a949d2a9-5011-4093-b6eb-51062f6d585a",
+      "name": "HN - AI stories"
+    },
+    {
+      "parameters": {
+        "jsCode": "const allHits = [];\n\nfor (const item of items) {\n  const hits = item.json.hits || [];\n  for (const hit of hits) {\n    allHits.push({\n      json: {\n        title: hit.title,\n        url: hit.url,\n        author: hit.author,\n        points: hit.points\n      }\n    });\n  }\n}\n\nreturn allHits;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "b24d709a-dfd5-4b28-a525-d8f8395f7afc",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=Here are today's top tech and AI stories from Hacker News:\n\n{{ $json.title }} - {{ $json.url }}\n\nFrom this list, pick the single most interesting and trending topic. Then write a LinkedIn post about it in a professional but engaging tone. Keep it under 200 words. End with 3 relevant hashtags."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        672,
+        0
+      ],
+      "id": "278b3370-b8b4-4254-b991-9f31cb3340e6",
+      "name": "Message a model",
+      "credentials": {
+        "openAiApi": {
+          "id": "h7GtmMrEM0jddtxu",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "02e71fea-0edd-43ef-8a04-143e948d6014",
+              "name": "linkedin_post",
+              "value": "={{ $json.output[0].content[0].text }}",
+              "type": "string"
+            },
+            {
+              "id": "f7b9547f-0ae4-40e0-b243-0b340038cfbd",
+              "name": "generated_at",
+              "value": "={{ $now }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        944,
+        0
+      ],
+      "id": "5d6828b6-9aea-4d24-a67c-d627eaafe1f5",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "sendTo": "chinazomnwagbo5@gmail.com",
+        "subject": "Daily LinkedIn Post Draft",
+        "message": "={{ $json.linkedin_post }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1200,
+        160
+      ],
+      "id": "33e5a3ac-3c29-4157-9d3f-e5a827f4ace1",
+      "name": "Send a message",
+      "webhookId": "78d7ab0c-f3db-41cb-800d-36a0d18eb4ae",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "wW2gcNkDi5vSIkwf",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1dQy_I-HS5lWV-oMSFbVySeENOU7fgxxtv8jzlMUBwFY/edit?gid=0#gid=0",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "linkedin_post",
+              "displayName": "linkedin_post",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "generated_at",
+              "displayName": "generated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1200,
+        0
+      ],
+      "id": "0e3fd31b-00a6-44f7-8074-c637cc2fe539",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "RgEjKZiJki4Lu7Yp",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "HN - Tech stories",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HN - AI stories",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HN - Top stories",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HN - Top stories": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HN - AI stories": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HN - Tech stories": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "72810db5-cbc3-4bff-b770-086e6b5a20f2",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a7d6bae9a2d403c44eb148d00942461a15adcdc43815eea8943d6cfab7e30fde"
+  },
+  "nodeGroups": [],
+  "id": "uycxmzgUA2mUTGXx",
+  "tags": []
+}

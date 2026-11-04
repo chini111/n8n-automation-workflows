@@ -1,0 +1,281 @@
+{
+  "name": "Stock Market",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "id": "f6795b78-993c-4774-8efe-83db94b07a8c",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://serpapi.com/search.json",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "engine",
+              "value": "google_trends"
+            },
+            {
+              "name": "q",
+              "value": "PS5, iPhone, GPU, laptop"
+            },
+            {
+              "name": "geo",
+              "value": "GB"
+            },
+            {
+              "name": "api_key",
+              "value": "cd1413bfe0a62aa02b7a27d0fd61a294ca4a1d7e89d6554e219a4d6a7b962059"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        0
+      ],
+      "id": "09f5c9cc-da91-4332-9bcd-d126208dac8d",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "const timelineData = $input.first().json.interest_over_time.timeline_data;\nconst latest = timelineData[timelineData.length - 1].values;\n\nlet topProduct = latest.reduce((max, item) => \n  item.value > max.value ? item : max\n);\n\nreturn [{ json: { trending_product: topProduct.query, interest_value: topProduct.value } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "514a7c8e-f91c-4efb-bc85-0afe9f45e526",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "url": "https://serpapi.com/search.json",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "engine",
+              "value": "google"
+            },
+            {
+              "name": "q",
+              "value": "={{ $json.trending_product }} site:gumtree.com cheap used"
+            },
+            {
+              "name": "geo",
+              "value": "gb"
+            },
+            {
+              "name": "api_key",
+              "value": "cd1413bfe0a62aa02b7a27d0fd61a294ca4a1d7e89d6554e219a4d6a7b962059"
+            },
+            {
+              "name": "num",
+              "value": "10"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        672,
+        0
+      ],
+      "id": "67faffb3-432e-40a7-b643-4a0630b4bb5a",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = $input.first().json.organic_results || [];\n\nconst listings = results.slice(0, 5).map(item => ({\n  title: item.title,\n  link: item.link,\n  snippet: item.snippet\n}));\n\nreturn listings.map(l => ({ json: l }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        0
+      ],
+      "id": "4e5b5afa-fd3c-44f7-ba50-3931bc96a9a5",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a reselling assistant. Here are Gumtree listings for used iPhones:\n\nTitle: {{ $json.title }}\nLink: {{ $json.link }}\nDetails: {{ $json.snippet }}\n\nBased on this listing, assess:\n1. Is this a potential good deal worth investigating?\n2. What would be a fair resale price for this item?\n3. Give a short recommendation (buy / skip / investigate further)\n\nKeep your response under 100 words.",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1120,
+        0
+      ],
+      "id": "7ad59c7d-4730-4b23-928b-4b18a106ef83",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        992,
+        208
+      ],
+      "id": "43c6aba1-345b-49fa-8359-51f2a8b4fc46",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "h7GtmMrEM0jddtxu",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "chinazomnwagbo5@gmail.com",
+        "subject": "=🔥 Resell Alert: {{ $('Code in JavaScript').item.json.trending_product }} Deal Found",
+        "message": "=Trending product: {{ $('Code in JavaScript').item.json.trending_product }}\n\nListing: {{ $('Code in JavaScript1').item.json.title }}\nLink: {{ $('Code in JavaScript1').item.json.link }}\n\nAI Analysis:\n{{ $json.output[0].content[0].text }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1488,
+        0
+      ],
+      "id": "cb04d0ed-fa62-413d-acee-bdfae71c95d2",
+      "name": "Send a message",
+      "webhookId": "68404950-093d-42ad-a1eb-2b727bbdf1c5",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "wW2gcNkDi5vSIkwf",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "f3015dba-db2e-422e-9343-2f6f15481360",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a7d6bae9a2d403c44eb148d00942461a15adcdc43815eea8943d6cfab7e30fde"
+  },
+  "nodeGroups": [],
+  "id": "DKXhpB68ZoDzM8EU",
+  "tags": []
+}

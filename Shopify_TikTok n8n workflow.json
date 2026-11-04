@@ -1,0 +1,752 @@
+{
+  "name": "Shopify/TikTok n8n workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.message.text }}",
+        "options": {
+          "systemMessage": "=You are a TikTok Shop and Shopify ecommerce assistant. When asked to find products, search for 3 trending items. For each product, you MUST use the Profit Margin Calculator tool to calculate viability — always show the price, cost, profit, margin percentage, and whether it is Viable: true or false. Only recommend products where Viable: true. Do NOT automatically add products to the Shopify store unless the user explicitly says \"add to store\". Always show the full margin breakdown in your response. Keep responses concise.\n\nAfter your full response, on a new line output exactly this with all 3 products filled in and no text after it:\nPRODUCTSJSON:{\"products\":[{\"name\":\"exact product name\",\"price\":0.00,\"cost\":0.00,\"profit\":0.00,\"margin\":0.00,\"viable\":true},{\"name\":\"exact product name\",\"price\":0.00,\"cost\":0.00,\"profit\":0.00,\"margin\":0.00,\"viable\":true},{\"name\":\"exact product name\",\"price\":0.00,\"cost\":0.00,\"profit\":0.00,\"margin\":0.00,\"viable\":true}]}",
+          "maxIterations": 4
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1248,
+        480
+      ],
+      "id": "70eaac96-4c79-4b99-8dfa-c1e92ecdeb63",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "gpt-4o",
+          "cachedResultUrl": ""
+        },
+        "responsesApiEnabled": false,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        752,
+        672
+      ],
+      "id": "c4f724c4-c506-4e32-9ab7-9e62658e0aa7",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "HB1WrfOaHhbLR53V",
+          "name": "OpenAI account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.message.chat.id }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        880,
+        672
+      ],
+      "id": "977a2527-5d6c-4823-9374-75d03002f440",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "={{ $('AI Agent').item.json.output.split('PRODUCTSJSON:')[0].trim() }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1840,
+        640
+      ],
+      "id": "e2181d49-12f1-403a-b5f3-4edb58f25946",
+      "name": "Send a text message",
+      "webhookId": "42a01f57-2c5a-4b23-98a1-274f0a5f0196",
+      "credentials": {
+        "telegramApi": {
+          "id": "NoMxm9bMFWhHGibf",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.5,
+      "position": [
+        784,
+        464
+      ],
+      "id": "e7f4008f-9070-451f-89f9-8de592ec59e2",
+      "name": "Telegram Trigger",
+      "webhookId": "f20c9adb-02fa-40ad-9bd7-eddb6c8aa6b3",
+      "credentials": {
+        "telegramApi": {
+          "id": "NoMxm9bMFWhHGibf",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.higgsfield.ai/kling-video/v3.0/std/text-to-video",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={\n  \"Authorization\": \"Key 259b54d7-2344-4548-ac9f-4c8b71ae137c\",\n  \"Content-Type\": \"application/json\"\n}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"prompt\": \"{{ $input.first().json.input }}\",\n  \"duration\": 10,\n  \"aspect_ratio\": \"9:16\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.5,
+      "position": [
+        544,
+        480
+      ],
+      "id": "8b34f57a-4006-46a8-a13e-fc757402a9fb",
+      "name": "HTTP Request2"
+    },
+    {
+      "parameters": {
+        "description": "Calculates profit margin. Pass price and cost like: price: $25, cost: $10",
+        "jsCode": "const input = $input.item.json.input || \"\";\nconst priceMatch = input.match(/price[:\\s]+\\$?([\\d.]+)/i);\nconst costMatch = input.match(/cost[:\\s]+\\$?([\\d.]+)/i);\nconst price = parseFloat(priceMatch?.[1]) || 0;\nconst cost = parseFloat(costMatch?.[1]) || 0;\nconst profit = price - cost;\nconst margin = ((profit / price) * 100).toFixed(2);\nconst viable = parseFloat(margin) >= 30;\nreturn `Price: $${price}, Cost: $${cost}, Profit: $${profit.toFixed(2)}, Margin: ${margin}%, Viable: ${viable}`;"
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        1136,
+        672
+      ],
+      "id": "4bb4d30b-a3b9-4c40-8267-fa4c04e44c22",
+      "name": "Calculates profit margin"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a434f33c-4d54-4cd5-997a-daab74fc58f7",
+              "leftValue": "={{ $json.margin }}",
+              "rightValue": 30,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1824,
+        448
+      ],
+      "id": "b038e050-a4ff-456e-8f3b-bc9ab14413e6",
+      "name": "If"
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.toolCalculator",
+      "typeVersion": 1,
+      "position": [
+        1264,
+        672
+      ],
+      "id": "ef962ebf-6603-47ef-8593-86bf42430eed",
+      "name": "Calculator"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1vzF2lpmytw8JGBTn5mUar1QljYAqXuKnrpe36Af-kJk",
+          "mode": "list",
+          "cachedResultName": "TikTok shop product log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1vzF2lpmytw8JGBTn5mUar1QljYAqXuKnrpe36Af-kJk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1vzF2lpmytw8JGBTn5mUar1QljYAqXuKnrpe36Af-kJk/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Product Name": "={{ $json.product_name }}",
+            "Date": "={{ new Date().toLocaleDateString('en-GB') }}",
+            "Selling Price": "={{ $json.selling_price }}",
+            "Profit Margin": "={{ $json.margin }}",
+            "Sourcing Cost": "={{ $json.sourcing_cost }}",
+            "Score": "={{ $json.product_score }}",
+            "Recommendation": "={{ $json.recommendation }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Product Name",
+              "displayName": "Product Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Selling Price",
+              "displayName": "Selling Price",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Sourcing Cost",
+              "displayName": "Sourcing Cost",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Profit Margin",
+              "displayName": "Profit Margin",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Date",
+              "displayName": "Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Score",
+              "displayName": "Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Recommendation",
+              "displayName": "Recommendation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2080,
+        368
+      ],
+      "id": "fbdcb62f-e82b-4d8b-a36b-01ea0b29986b",
+      "name": "TT shop product log",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ysGPT3WIgWIwmomz",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "product",
+        "operation": "getAll",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.shopifyTool",
+      "typeVersion": 1,
+      "position": [
+        1392,
+        672
+      ],
+      "id": "f7959dac-6241-4592-b6f6-929e107c96ba",
+      "name": "Get many products in Shopify",
+      "credentials": {
+        "shopifyOAuth2Api": {
+          "id": "pN5Pf4MWs8nWVRWo",
+          "name": "Shopify account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "getAll",
+        "returnAll": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Return_All', ``, 'boolean') }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.shopifyTool",
+      "typeVersion": 1,
+      "position": [
+        1520,
+        672
+      ],
+      "id": "5e475156-30dc-484d-9179-9b40b6417311",
+      "name": "Get many orders in Shopify",
+      "credentials": {
+        "shopifyOAuth2Api": {
+          "id": "pN5Pf4MWs8nWVRWo",
+          "name": "Shopify account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "product",
+        "title": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Title', ``, 'string') }}",
+        "additionalFields": {
+          "body_html": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Body_HTML', ``, 'string') }}",
+          "product_type": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Product_Type', ``, 'string') }}"
+        }
+      },
+      "type": "n8n-nodes-base.shopifyTool",
+      "typeVersion": 1,
+      "position": [
+        1648,
+        672
+      ],
+      "id": "88c6acf9-4d8b-484b-aef3-09cee19a8646",
+      "name": "Create a product in Shopify",
+      "credentials": {
+        "shopifyOAuth2Api": {
+          "id": "pN5Pf4MWs8nWVRWo",
+          "name": "Shopify account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "4d9cd56b-567e-47f1-bf49-768a736c6102",
+              "leftValue": "={{ $json.message.chat.id }}",
+              "rightValue": 7564837178,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        944,
+        464
+      ],
+      "id": "2a111aab-f28a-4132-b955-718752b23b9a",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "Unauthorised",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1088,
+        320
+      ],
+      "id": "013d5ea1-1481-4158-8362-d8cb2e52265b",
+      "name": "Send a text message1",
+      "webhookId": "d29c5669-8671-4861-b051-15dd4beb16eb",
+      "credentials": {
+        "telegramApi": {
+          "id": "NoMxm9bMFWhHGibf",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const output = $input.item.json.output;\n\n// Find the PRODUCTSJSON block\nconst match = output.match(/PRODUCTS_?JSON:(\\{.*\\})/s);\nif (!match) return [{ json: { product_name: output, selling_price: '', sourcing_cost: '', profit: '', margin: '', date: new Date().toISOString() } }];\n\ntry {\n  const data = JSON.parse(match[1]);\n  const products = Array.isArray(data.products) ? data.products : Object.values(data.products);\n  \n  return products.map(p => ({\n    json: {\n      product_name: p.name,\n      selling_price: p.price,\n      sourcing_cost: p.cost,\n      profit: p.profit,\n      margin: p.margin,\n      viable: p.viable,\n      date: new Date().toISOString()\n    }\n  }));\n} catch(e) {\n  return [{ json: { product_name: 'Parse error: ' + e.message, date: new Date().toISOString() } }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1664,
+        352
+      ],
+      "id": "3020a7de-83cd-4d07-9161-9a1fbff03b4b",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "=\n🎬 Ad Copy:\n{{ $json.output[0].content[0].text }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2352,
+        240
+      ],
+      "id": "d7eeee9f-d3fc-4a81-90cc-826b075471e4",
+      "name": "Send a text message2",
+      "webhookId": "1f344c6c-d455-4270-840f-76a9c09e774d",
+      "credentials": {
+        "telegramApi": {
+          "id": "NoMxm9bMFWhHGibf",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=Write a short punchy TikTok ad script for {{ $('Code in JavaScript').first().json.product_name }} priced at ${{ $('Code in JavaScript').first().json.selling_price }}. Make it 3 sentences, energetic, with a call to action. Keep it under 150 words."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        2080,
+        240
+      ],
+      "id": "afc80bab-4a32-4087-9002-ce1b53212884",
+      "name": "Message a model",
+      "credentials": {
+        "openAiApi": {
+          "id": "HB1WrfOaHhbLR53V",
+          "name": "OpenAI account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "google_trends",
+        "q": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Search_Query__q_', ``, 'string') }}",
+        "additionalFields": {
+          "date": "today 3-m"
+        },
+        "requestOptions": {}
+      },
+      "type": "n8n-nodes-serpapi.serpApiTool",
+      "typeVersion": 1,
+      "position": [
+        1008,
+        672
+      ],
+      "id": "3b562206-1ff1-41e7-aeb3-c8242a00b69b",
+      "name": "Google_trends search in SerpApi",
+      "credentials": {
+        "serpApi": {
+          "id": "Ymk7ab0dMfa0mH5g",
+          "name": "SerpApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const output = $input.item.json.output;\n\nconst marginMatch = output.match(/Margin:\\s*([\\d.]+)%/);\nconst margin = parseFloat(marginMatch?.[1] ?? 0);\n\nlet score = 0;\nif (margin >= 30) score += 40;\nif (margin >= 50) score += 20;\nif (output.toLowerCase().includes('rising')) score += 30;\nif (output.toLowerCase().includes('low competition')) score += 10;\n\nreturn [{\n  json: {\n    ...($input.item.json),\n    product_score: score,\n    recommendation: score >= 60 ? 'Strong Buy' : score >= 40 ? 'Consider' : 'Pass'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1504,
+        352
+      ],
+      "id": "b1d641ba-2381-477f-8636-ee0f1c97d789",
+      "name": "Product score"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Product score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a text message": {
+      "main": [
+        []
+      ]
+    },
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request2": {
+      "ai_tool": [
+        []
+      ]
+    },
+    "Calculates profit margin": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "TT shop product log",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Calculator": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many products in Shopify": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many orders in Shopify": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a product in Shopify": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send a text message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TT shop product log": {
+      "main": [
+        []
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Send a text message2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google_trends search in SerpApi": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Product score": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "7eb62b96-da70-4900-b2d5-7faee818ce53",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a7d6bae9a2d403c44eb148d00942461a15adcdc43815eea8943d6cfab7e30fde"
+  },
+  "nodeGroups": [],
+  "id": "OlTYIfcsSNHRfjdV",
+  "tags": []
+}
